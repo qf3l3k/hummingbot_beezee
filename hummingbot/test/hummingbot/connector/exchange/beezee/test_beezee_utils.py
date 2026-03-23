@@ -3,13 +3,20 @@ from decimal import Decimal
 
 from hummingbot.connector.exchange.beezee import beezee_constants as CONSTANTS
 from hummingbot.connector.exchange.beezee.beezee_utils import (
+    BeezeeConfigMap,
+    BeezeeMnemonicWalletAccountMode,
+    BeezeeTestnetNetworkMode,
     BeezeeToken,
     chain_amount_to_display,
     chain_price_to_display,
+    derive_private_key_from_mnemonic,
     display_amount_to_chain,
     display_price_to_chain,
     market_from_data,
     minimum_order_size_for_price,
+    normalize_hd_path,
+    normalize_mnemonic,
+    private_key_from_account_mode,
     token_from_metadata,
     unique_market_symbols,
 )
@@ -98,3 +105,43 @@ class BeezeeUtilsTests(unittest.TestCase):
         )
         self.assertEqual(CONSTANTS.DEFAULT_PRICE_SIG_DIGITS, 10)
 
+    def test_normalize_mnemonic_validates_word_count_and_whitespace(self):
+        mnemonic = normalize_mnemonic("  abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about  ")
+
+        self.assertEqual(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            mnemonic,
+        )
+
+    def test_normalize_hd_path_accepts_standard_cosmos_path(self):
+        self.assertEqual("m/44'/118'/0'/0/0", normalize_hd_path("m/44'/118'/0'/0/0"))
+
+    def test_derive_private_key_from_mnemonic_is_stable(self):
+        mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+
+        private_key_a = derive_private_key_from_mnemonic(mnemonic=mnemonic)
+        private_key_b = derive_private_key_from_mnemonic(mnemonic=mnemonic)
+
+        self.assertEqual(private_key_a, private_key_b)
+        self.assertEqual(64, len(private_key_a))
+
+    def test_private_key_from_account_mode_derives_from_mnemonic_wallet(self):
+        account_mode = BeezeeMnemonicWalletAccountMode(
+            mnemonic="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        )
+
+        private_key = private_key_from_account_mode(account_mode)
+
+        self.assertIsNotNone(private_key)
+        self.assertEqual(64, len(private_key))
+
+    def test_config_map_accepts_testnet_network(self):
+        config = BeezeeConfigMap(
+            connector="beezee",
+            network=BeezeeTestnetNetworkMode(
+                rest_endpoint="https://testnet-rest.example",
+                rpc_endpoint="https://testnet-rpc.example",
+            ),
+        )
+
+        self.assertEqual(CONSTANTS.TESTNET_CHAIN_ID, config.network.chain_id)

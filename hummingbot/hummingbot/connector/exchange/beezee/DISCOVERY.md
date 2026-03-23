@@ -78,3 +78,8 @@ From current Cosmos chain registry:
 - REST: `https://rest.getbze.com`
 - RPC: `https://rpc.getbze.com`
 - Websocket: `wss://rpc.getbze.com/websocket`
+
+Additional testnet finding from the Beezee source repository:
+
+- upstream Beezee repo includes testnet genesis files up to `bzetestnet-3`
+- no stable public testnet REST/RPC/WebSocket URLs were confirmed from the local Beezee sources used for this connector draft

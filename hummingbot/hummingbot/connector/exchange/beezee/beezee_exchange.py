@@ -13,11 +13,11 @@ from hummingbot.connector.exchange.beezee.beezee_signer import BeezeeSigner
 from hummingbot.connector.exchange.beezee.beezee_utils import (
     BeezeeConfigMap,
     BeezeeMarket,
-    BeezeeWalletAccountMode,
     chain_amount_to_display,
     chain_price_to_display,
     display_price_to_chain,
     minimum_order_size_for_price,
+    private_key_from_account_mode,
     token_from_metadata,
 )
 from hummingbot.connector.exchange_py_base import ExchangePyBase
@@ -53,8 +53,8 @@ class BeezeeExchange(ExchangePyBase):
         account_type = connector_configuration.account_type
         self._signer: Optional[BeezeeSigner] = None
         self._account_address = getattr(account_type, "address", None)
-        if isinstance(account_type, BeezeeWalletAccountMode):
-            private_key_value = account_type.private_key.get_secret_value()
+        private_key_value = private_key_from_account_mode(account_type)
+        if private_key_value is not None:
             self._signer = BeezeeSigner(private_key_value, network.address_prefix)
             self._account_address = self._account_address or self._signer.address
 

@@ -17,6 +17,10 @@ MAINNET_CHAIN_ID = "beezee-1"
 MAINNET_ADDRESS_PREFIX = "bze"
 MAINNET_NATIVE_DENOM = "ubze"
 
+TESTNET_CHAIN_ID = "bzetestnet-3"
+TESTNET_ADDRESS_PREFIX = "bze"
+TESTNET_NATIVE_DENOM = "ubze"
+
 PING_PATH_URL = "/cosmos/base/tendermint/v1beta1/blocks/latest"
 TRADING_PAIRS_PATH_URL = "/bze/tradebin/all_markets"
 TRADING_RULES_PATH_URL = "/bze/tradebin/all_markets"

@@ -6,7 +6,9 @@ from hummingbot.connector.exchange.beezee.beezee_exchange import BeezeeExchange
 from hummingbot.connector.exchange.beezee.beezee_utils import (
     BeezeeConfigMap,
     BeezeeMainnetNetworkMode,
+    BeezeeMnemonicWalletAccountMode,
     BeezeeReadOnlyAccountMode,
+    private_key_from_account_mode,
     market_from_data,
 )
 from hummingbot.core.data_type.common import OrderType, TradeType
@@ -202,3 +204,29 @@ class BeezeeExchangeTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("UBZE", fee.flat_fees[0].token)
         self.assertEqual(Decimal("0.0025"), fee.flat_fees[0].amount)
+
+    async def test_exchange_initializes_signer_from_mnemonic_wallet_mode(self):
+        mnemonic_account = BeezeeMnemonicWalletAccountMode(
+            mnemonic="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        )
+        config = BeezeeConfigMap(
+            connector="beezee",
+            network=BeezeeMainnetNetworkMode(),
+            account_type=mnemonic_account,
+        )
+
+        exchange = BeezeeExchange(
+            connector_configuration=config,
+            trading_pairs=["BZE-USDC"],
+            trading_required=True,
+        )
+
+        self.assertIsNotNone(exchange._signer)
+        self.assertEqual(
+            exchange._signer.address,
+            exchange._account_address,
+        )
+        self.assertEqual(
+            private_key_from_account_mode(mnemonic_account),
+            exchange._signer._private_key_bytes.hex(),
+        )

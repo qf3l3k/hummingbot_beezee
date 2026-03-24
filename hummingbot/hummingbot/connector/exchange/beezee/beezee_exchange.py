@@ -57,6 +57,10 @@ class BeezeeExchange(ExchangePyBase):
         if private_key_value is not None:
             self._signer = BeezeeSigner(private_key_value, network.address_prefix)
             self._account_address = self._account_address or self._signer.address
+            self.logger().info(
+                f"Beezee wallet mode initialized. Configured address: {getattr(account_type, 'address', None) or 'None'}; "
+                f"signer address: {self._signer.address}; effective account address: {self._account_address}."
+            )
 
         self._rest_endpoint = network.rest_endpoint
         self._rpc_endpoint = network.rpc_endpoint

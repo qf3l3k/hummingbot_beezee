@@ -59,6 +59,7 @@ class BeezeeAPIDataSource:
         self._markets_by_id: Dict[str, BeezeeMarket] = {}
         self._symbol_map: Optional[bidict] = None
         self._known_limit_ids = {rate_limit.limit_id for rate_limit in CONSTANTS.RATE_LIMITS}
+        self._warned_missing_metadata_denoms: Set[str] = set()
 
     @classmethod
     def logger(cls):
@@ -119,11 +120,30 @@ class BeezeeAPIDataSource:
                     )
                 ).get("metadata", {})
             except Exception:
-                self.logger().warning(
-                    f"Beezee denom metadata unavailable for '{denom}'. Falling back to raw denom metadata."
-                )
+                metadata = self._fallback_metadata_for_denom(denom)
+                if denom not in self._warned_missing_metadata_denoms:
+                    self.logger().warning(
+                        f"Beezee denom metadata unavailable for '{denom}'. Falling back to raw denom metadata."
+                    )
+                    self._warned_missing_metadata_denoms.add(denom)
         self._metadata_by_denom[denom] = metadata
         return metadata
+
+    def _fallback_metadata_for_denom(self, denom: str) -> Dict[str, Any]:
+        if denom == self._native_denom:
+            display = self._native_denom[1:] if self._native_denom.startswith("u") else self._native_denom
+            return {
+                "description": "Beezee native token",
+                "denom_units": [
+                    {"denom": self._native_denom, "exponent": 0},
+                    {"denom": display, "exponent": 6},
+                ],
+                "base": self._native_denom,
+                "display": display,
+                "name": display.upper(),
+                "symbol": display.upper(),
+            }
+        return {}
 
     async def get_all_markets(self, refresh: bool = False) -> Dict[str, BeezeeMarket]:
         if self._markets_by_id and not refresh:

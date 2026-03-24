@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 
 from hummingbot.core.api_throttler.async_throttler import AsyncThrottler
@@ -10,6 +11,13 @@ def public_rest_url(path_url: str, domain: str) -> str:
 
 def private_rest_url(path_url: str, domain: str) -> str:
     return public_rest_url(path_url=path_url, domain=domain)
+
+
+async def get_current_server_time(
+    throttler: Optional[AsyncThrottler] = None,
+    domain: str = "",
+) -> float:
+    return time.time()
 
 
 def build_api_factory(throttler: Optional[AsyncThrottler] = None, auth=None) -> WebAssistantsFactory:

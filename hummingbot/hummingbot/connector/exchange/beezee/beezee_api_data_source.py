@@ -2,6 +2,7 @@ import hashlib
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set
+from urllib.parse import quote
 
 from bidict import bidict
 
@@ -94,7 +95,8 @@ class BeezeeAPIDataSource:
         return (await self._request(CONSTANTS.TRADEBIN_PARAMS_PATH_URL)).get("params", {})
 
     async def get_denom_metadata(self, denom: str) -> Dict[str, Any]:
-        metadata = (await self._request(f"{CONSTANTS.DENOM_METADATA_PATH_URL}/{denom}")).get("metadata", {})
+        encoded_denom = quote(denom, safe="")
+        metadata = (await self._request(f"{CONSTANTS.DENOM_METADATA_PATH_URL}/{encoded_denom}")).get("metadata", {})
         self._metadata_by_denom[denom] = metadata
         return metadata
 

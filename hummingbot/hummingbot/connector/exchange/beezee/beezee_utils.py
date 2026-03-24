@@ -353,7 +353,14 @@ class BeezeeMnemonicWalletAccountMode(BaseClientModel):
 
 class BeezeeReadOnlyAccountMode(BaseClientModel):
     name: Literal["read_only"] = "read_only"
-    address: Optional[str] = Field(default=None, json_schema_extra={"prompt": "Enter your Beezee address (optional)", "prompt_on_new": True})
+    address: Optional[str] = Field(
+        default=None,
+        json_schema_extra={
+            "prompt": "Enter your Beezee address (optional)",
+            "prompt_on_new": True,
+            "is_connect_key": True,
+        },
+    )
     model_config = ConfigDict(title="read_only")
 
 

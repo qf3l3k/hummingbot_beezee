@@ -25,6 +25,7 @@ DEFAULT_FEES = TradeFeeSchema(
 
 RE_HEX_PRIVATE_KEY = re.compile(r"^(?:0x)?[0-9a-fA-F]{64}$")
 RE_BIP32_PATH = re.compile(r"^m(?:/[0-9]+'?)+$")
+BZE_ENCRYPTED_SECRET_HEX = re.compile(r"^[0-9a-fA-F]+$")
 BIP39_WORD_COUNTS = {12, 15, 18, 21, 24}
 COSMOS_HUB_DERIVATION_PATH = "m/44'/118'/0'/0/0"
 
@@ -119,6 +120,11 @@ def normalize_private_key(value: str) -> str:
     if not RE_HEX_PRIVATE_KEY.match(stripped):
         raise ValueError("Beezee wallet mode expects a 32-byte secp256k1 private key in hex format.")
     return stripped[2:] if stripped.startswith("0x") else stripped
+
+
+def looks_like_encrypted_secret(value: str) -> bool:
+    stripped = value.strip()
+    return len(stripped) > 64 and len(stripped) % 2 == 0 and BZE_ENCRYPTED_SECRET_HEX.match(stripped) is not None
 
 
 def normalize_mnemonic(value: str) -> str:
@@ -303,7 +309,10 @@ class BeezeeWalletAccountMode(BaseClientModel):
     def validate_private_key(cls, value: Any):
         if hasattr(value, "get_secret_value"):
             value = value.get_secret_value()
-        return normalize_private_key(str(value))
+        value = str(value)
+        if looks_like_encrypted_secret(value):
+            return value
+        return normalize_private_key(value)
 
 
 class BeezeeMnemonicWalletAccountMode(BaseClientModel):
@@ -343,7 +352,10 @@ class BeezeeMnemonicWalletAccountMode(BaseClientModel):
     def validate_mnemonic(cls, value: Any):
         if hasattr(value, "get_secret_value"):
             value = value.get_secret_value()
-        return normalize_mnemonic(str(value))
+        value = str(value)
+        if looks_like_encrypted_secret(value):
+            return value
+        return normalize_mnemonic(value)
 
     @field_validator("hd_path", mode="before")
     @classmethod

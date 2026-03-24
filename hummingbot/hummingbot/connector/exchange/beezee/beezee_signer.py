@@ -64,10 +64,11 @@ class BeezeeSigner:
 
     @property
     def address(self) -> str:
-        # Cosmos SDK account addresses use the first 20 bytes of SHA-256(pubkey),
-        # not Bitcoin-style RIPEMD160(SHA-256(pubkey)).
-        address_hash = hashlib.sha256(self.public_key_bytes).digest()[:20]
-        return bech32_encode(self._address_prefix, address_hash)
+        # Beezee is built on a Cosmos SDK 0.47.x fork, where secp256k1 account
+        # addresses are still Bitcoin-style RIPEMD160(SHA256(pubkey)).
+        sha_hash = hashlib.sha256(self.public_key_bytes).digest()
+        ripe_hash = hashlib.new("ripemd160", sha_hash).digest()
+        return bech32_encode(self._address_prefix, ripe_hash)
 
     def sign(self, payload: bytes) -> bytes:
         return self._signing_key.sign_deterministic(

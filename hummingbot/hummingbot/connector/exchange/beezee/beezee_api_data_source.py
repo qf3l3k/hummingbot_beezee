@@ -56,6 +56,7 @@ class BeezeeAPIDataSource:
         self._metadata_by_denom: Dict[str, Dict[str, Any]] = {}
         self._markets_by_id: Dict[str, BeezeeMarket] = {}
         self._symbol_map: Optional[bidict] = None
+        self._known_limit_ids = {rate_limit.limit_id for rate_limit in CONSTANTS.RATE_LIMITS}
 
     @property
     def account_address(self) -> Optional[str]:
@@ -63,12 +64,15 @@ class BeezeeAPIDataSource:
 
     async def _request(self, path_url: str, params: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None, method: RESTMethod = RESTMethod.GET, limit_id: Optional[str] = None) -> Dict[str, Any]:
         rest_assistant = await self._api_factory.get_rest_assistant()
+        throttler_limit_id = limit_id or path_url
+        if throttler_limit_id not in self._known_limit_ids:
+            throttler_limit_id = CONSTANTS.QUERY_LIMIT_ID if method == RESTMethod.GET else CONSTANTS.TX_LIMIT_ID
         return await rest_assistant.execute_request(
             url=f"{self._rest_endpoint}{path_url}",
             params=params,
             data=data,
             method=method,
-            throttler_limit_id=limit_id or path_url,
+            throttler_limit_id=throttler_limit_id,
         )
 
     async def _paged_request(self, path_url: str, item_key: str, params: Optional[Dict[str, Any]] = None, page_limit: int = CONSTANTS.DEFAULT_MARKET_PAGE_SIZE) -> List[Dict[str, Any]]:

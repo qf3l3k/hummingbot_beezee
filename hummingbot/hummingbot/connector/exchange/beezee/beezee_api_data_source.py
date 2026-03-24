@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set
@@ -59,6 +60,10 @@ class BeezeeAPIDataSource:
         self._symbol_map: Optional[bidict] = None
         self._known_limit_ids = {rate_limit.limit_id for rate_limit in CONSTANTS.RATE_LIMITS}
 
+    @classmethod
+    def logger(cls):
+        return logging.getLogger(__name__)
+
     @property
     def account_address(self) -> Optional[str]:
         return self._account_address
@@ -96,7 +101,27 @@ class BeezeeAPIDataSource:
 
     async def get_denom_metadata(self, denom: str) -> Dict[str, Any]:
         encoded_denom = quote(denom, safe="")
-        metadata = (await self._request(f"{CONSTANTS.DENOM_METADATA_PATH_URL}/{encoded_denom}")).get("metadata", {})
+        metadata: Dict[str, Any] = {}
+        try:
+            metadata = (
+                await self._request(
+                    f"{CONSTANTS.DENOM_METADATA_PATH_URL}/{encoded_denom}",
+                    limit_id=CONSTANTS.DENOM_METADATA_PATH_URL,
+                )
+            ).get("metadata", {})
+        except Exception:
+            try:
+                metadata = (
+                    await self._request(
+                        CONSTANTS.DENOM_METADATA_BY_QUERY_PATH_URL,
+                        params={"denom": denom},
+                        limit_id=CONSTANTS.DENOM_METADATA_BY_QUERY_PATH_URL,
+                    )
+                ).get("metadata", {})
+            except Exception:
+                self.logger().warning(
+                    f"Beezee denom metadata unavailable for '{denom}'. Falling back to raw denom metadata."
+                )
         self._metadata_by_denom[denom] = metadata
         return metadata
 

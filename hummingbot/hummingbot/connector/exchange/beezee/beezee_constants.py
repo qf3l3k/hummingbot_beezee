@@ -31,6 +31,7 @@ MARKET_ORDER_PATH_URL = "/bze/tradebin/market_order"
 ALL_USER_DUST_PATH_URL = "/bze/tradebin/all_user_dust"
 BALANCES_PATH_URL = "/cosmos/bank/v1beta1/balances"
 DENOM_METADATA_PATH_URL = "/cosmos/bank/v1beta1/denoms_metadata"
+DENOM_METADATA_BY_QUERY_PATH_URL = "/cosmos/bank/v1beta1/denoms_metadata_by_query_string"
 ACCOUNT_INFO_PATH_URL = "/cosmos/auth/v1beta1/accounts"
 GET_TX_PATH_URL = "/cosmos/tx/v1beta1/txs"
 BROADCAST_TX_PATH_URL = "/cosmos/tx/v1beta1/txs"
@@ -82,6 +83,7 @@ RATE_LIMITS = [
     RateLimit(limit_id=ALL_USER_DUST_PATH_URL, limit=120, time_interval=MINUTE, linked_limits=[LinkedLimitWeightPair(QUERY_LIMIT_ID, 1)]),
     RateLimit(limit_id=BALANCES_PATH_URL, limit=120, time_interval=MINUTE, linked_limits=[LinkedLimitWeightPair(QUERY_LIMIT_ID, 1)]),
     RateLimit(limit_id=DENOM_METADATA_PATH_URL, limit=120, time_interval=MINUTE, linked_limits=[LinkedLimitWeightPair(QUERY_LIMIT_ID, 1)]),
+    RateLimit(limit_id=DENOM_METADATA_BY_QUERY_PATH_URL, limit=120, time_interval=MINUTE, linked_limits=[LinkedLimitWeightPair(QUERY_LIMIT_ID, 1)]),
     RateLimit(limit_id=ACCOUNT_INFO_PATH_URL, limit=120, time_interval=MINUTE, linked_limits=[LinkedLimitWeightPair(QUERY_LIMIT_ID, 1)]),
     RateLimit(limit_id=GET_TX_PATH_URL, limit=120, time_interval=MINUTE, linked_limits=[LinkedLimitWeightPair(QUERY_LIMIT_ID, 1)]),
     RateLimit(limit_id=BROADCAST_TX_PATH_URL, limit=30, time_interval=MINUTE, linked_limits=[LinkedLimitWeightPair(TX_LIMIT_ID, 1)]),

@@ -132,6 +132,12 @@ class BeezeeExchange(ExchangePyBase):
     def is_trading_required(self) -> bool:
         return self._trading_required
 
+    @property
+    def status_dict(self) -> Dict[str, bool]:
+        status = super().status_dict
+        status["user_stream_initialized"] = True
+        return status
+
     def supported_order_types(self):
         return [OrderType.LIMIT]
 

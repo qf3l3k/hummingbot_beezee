@@ -56,10 +56,17 @@ class BeezeeExchange(ExchangePyBase):
         private_key_value = private_key_from_account_mode(account_type)
         if private_key_value is not None:
             self._signer = BeezeeSigner(private_key_value, network.address_prefix)
-            self._account_address = self._account_address or self._signer.address
+            configured_address = self._account_address
+            signer_address = self._signer.address
+            if configured_address is not None and configured_address != signer_address:
+                raise ValueError(
+                    f"Beezee configured wallet address '{configured_address}' does not match signer-derived "
+                    f"address '{signer_address}'. Check mnemonic/passphrase/hd_path or use the correct private key."
+                )
+            self._account_address = configured_address or signer_address
             self.logger().info(
                 f"Beezee wallet mode initialized. Configured address: {getattr(account_type, 'address', None) or 'None'}; "
-                f"signer address: {self._signer.address}; effective account address: {self._account_address}."
+                f"signer address: {signer_address}; effective account address: {self._account_address}."
             )
 
         self._rest_endpoint = network.rest_endpoint
@@ -127,6 +134,12 @@ class BeezeeExchange(ExchangePyBase):
 
     def supported_order_types(self):
         return [OrderType.LIMIT]
+
+    def _is_user_stream_initialized(self) -> bool:
+        # Beezee v1 does not have a reliable private stream, so order and balance
+        # state are maintained through polling. Do not block connector readiness
+        # on a websocket-style user stream handshake that will never occur.
+        return True
 
     def _is_request_exception_related_to_time_synchronizer(self, request_exception: Exception) -> bool:
         return False

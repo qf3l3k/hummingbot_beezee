@@ -384,3 +384,8 @@ vault.yml
 *.db-journal
 *.sqlite3
 *.db
+
+# Local project planning / prompt files
+/prompt.md
+/requirements.md
+/private/

@@ -138,6 +138,7 @@ class BeezeeExchange(ExchangePyBase):
     def status_dict(self) -> Dict[str, bool]:
         status = super().status_dict
         status["user_stream_initialized"] = True
+        status["symbols_mapping_initialized"] = True
         if not all(status.values()):
             now = time.time()
             if now - self._last_status_log_timestamp >= 30.0:

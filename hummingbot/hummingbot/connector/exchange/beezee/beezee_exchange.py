@@ -1,5 +1,6 @@
 from collections import defaultdict
 from decimal import Decimal
+import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from hummingbot.connector.constants import s_decimal_NaN
@@ -81,6 +82,7 @@ class BeezeeExchange(ExchangePyBase):
         self._creation_tx_hashes: Dict[str, str] = {}
         self._cancel_tx_hashes: Dict[str, str] = {}
         self._processed_trade_ids_by_order: Dict[str, Set[str]] = defaultdict(set)
+        self._last_status_log_timestamp = 0.0
 
         super().__init__(balance_asset_limit=balance_asset_limit, rate_limits_share_pct=rate_limits_share_pct)
 
@@ -136,7 +138,17 @@ class BeezeeExchange(ExchangePyBase):
     def status_dict(self) -> Dict[str, bool]:
         status = super().status_dict
         status["user_stream_initialized"] = True
+        if not all(status.values()):
+            now = time.time()
+            if now - self._last_status_log_timestamp >= 30.0:
+                pending = [key for key, value in status.items() if not value]
+                self.logger().warning(f"Beezee connector not ready. Pending status flags: {pending}")
+                self._last_status_log_timestamp = now
         return status
+
+    @property
+    def ready(self) -> bool:
+        return all(self.status_dict.values())
 
     def supported_order_types(self):
         return [OrderType.LIMIT]

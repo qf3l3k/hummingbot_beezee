@@ -229,43 +229,65 @@ class BeezeeExchange(ExchangePyBase):
     ) -> Tuple[str, float]:
         if self._signer is None:
             raise ValueError("Beezee wallet mode is required for order creation.")
-        market = await self._build_data_source().get_market_by_trading_pair(trading_pair)
+        data_source = self._build_data_source()
+        market = await data_source.get_market_by_trading_pair(trading_pair)
         chain_price = display_price_to_chain(price, market)
         minimum_amount = minimum_order_size_for_price(chain_price, market)
         if amount < minimum_amount:
             raise ValueError(f"Beezee minimum size at price {price} is {minimum_amount} {market.base.symbol}.")
-        response = await self._build_data_source().broadcast_create_order(
-            market=market,
-            order_type=CONSTANTS.SIDE_BUY if trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL,
-            amount=amount,
-            price=price,
-            gas_limit=self._connector_configuration.account_type.create_order_gas_limit,
-            memo=f"hbot:{order_id}",
-        )
-        tx_response = response.get("tx_response", {})
-        if int(tx_response.get("code", 0)) != 0:
-            raise IOError(f"Beezee order create failed: {tx_response.get('raw_log', tx_response)}")
-        tx_hash = tx_response["txhash"]
-        self._creation_tx_hashes[order_id] = tx_hash
-        return tx_hash, self.current_timestamp
+        last_error: Optional[str] = None
+        for attempt in range(2):
+            response = await data_source.broadcast_create_order(
+                market=market,
+                order_type=CONSTANTS.SIDE_BUY if trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL,
+                amount=amount,
+                price=price,
+                gas_limit=self._connector_configuration.account_type.create_order_gas_limit,
+                memo=f"hbot:{order_id}",
+            )
+            tx_response = response.get("tx_response", {})
+            if int(tx_response.get("code", 0)) == 0:
+                tx_hash = tx_response["txhash"]
+                self._creation_tx_hashes[order_id] = tx_hash
+                return tx_hash, self.current_timestamp
+            last_error = tx_response.get("raw_log", str(tx_response))
+            if "account sequence mismatch" in last_error.lower() and attempt == 0:
+                await data_source.reset_account_sequence()
+                continue
+            raise IOError(f"Beezee order create failed: {last_error}")
+        raise IOError(f"Beezee order create failed: {last_error}")
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
         if self._signer is None:
             raise ValueError("Beezee wallet mode is required for cancels.")
-        market = await self._build_data_source().get_market_by_trading_pair(tracked_order.trading_pair)
-        exchange_order_id = await tracked_order.get_exchange_order_id()
-        response = await self._build_data_source().broadcast_cancel_order(
-            market_id=market.market_id,
-            order_type=CONSTANTS.SIDE_BUY if tracked_order.trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL,
-            order_id=exchange_order_id,
-            gas_limit=self._connector_configuration.account_type.cancel_order_gas_limit,
-            memo=f"hbot-cancel:{order_id}",
-        )
-        tx_response = response.get("tx_response", {})
-        if int(tx_response.get("code", 0)) != 0:
-            raise IOError(f"Beezee cancel failed: {tx_response.get('raw_log', tx_response)}")
-        self._cancel_tx_hashes[order_id] = tx_response["txhash"]
-        return True
+        data_source = self._build_data_source()
+        market = await data_source.get_market_by_trading_pair(tracked_order.trading_pair)
+        exchange_order_id = tracked_order.exchange_order_id
+        if not exchange_order_id or len(exchange_order_id) != CONSTANTS.ORDER_ID_LENGTH:
+            status_update = await self._request_order_status(tracked_order)
+            exchange_order_id = status_update.exchange_order_id
+        if not exchange_order_id or len(exchange_order_id) != CONSTANTS.ORDER_ID_LENGTH:
+            raise ValueError(f"Beezee cancel requires a resolved exchange order id for {order_id}.")
+
+        last_error: Optional[str] = None
+        for attempt in range(2):
+            response = await data_source.broadcast_cancel_order(
+                market_id=market.market_id,
+                order_type=CONSTANTS.SIDE_BUY if tracked_order.trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL,
+                order_id=exchange_order_id,
+                gas_limit=self._connector_configuration.account_type.cancel_order_gas_limit,
+                memo=f"hbot-cancel:{order_id}",
+            )
+            tx_response = response.get("tx_response", {})
+            if int(tx_response.get("code", 0)) == 0:
+                self._cancel_tx_hashes[order_id] = tx_response["txhash"]
+                return True
+            last_error = tx_response.get("raw_log", str(tx_response))
+            if "account sequence mismatch" in last_error.lower() and attempt == 0:
+                await data_source.reset_account_sequence()
+                continue
+            raise IOError(f"Beezee cancel failed: {last_error}")
+        raise IOError(f"Beezee cancel failed: {last_error}")
 
     async def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]) -> List[TradingRule]:
         data_source = self._build_data_source()

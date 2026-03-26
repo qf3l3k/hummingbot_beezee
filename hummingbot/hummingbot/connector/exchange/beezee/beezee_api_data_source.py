@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 from dataclasses import dataclass
@@ -60,6 +61,9 @@ class BeezeeAPIDataSource:
         self._symbol_map: Optional[bidict] = None
         self._known_limit_ids = {rate_limit.limit_id for rate_limit in CONSTANTS.RATE_LIMITS}
         self._warned_missing_metadata_denoms: Set[str] = set()
+        self._account_info_lock = asyncio.Lock()
+        self._cached_account_number: Optional[int] = None
+        self._next_account_sequence: Optional[int] = None
 
     @classmethod
     def logger(cls):
@@ -200,13 +204,31 @@ class BeezeeAPIDataSource:
             return []
         return (await self._request(CONSTANTS.ALL_USER_DUST_PATH_URL, params={"address": self._account_address})).get("list", [])
 
-    async def get_account_info(self) -> BeezeeAccountInfo:
+    async def get_account_info(self, refresh: bool = False) -> BeezeeAccountInfo:
         if self._account_address is None:
             raise ValueError("Beezee account address is required for trading.")
+        if not refresh and self._cached_account_number is not None and self._next_account_sequence is not None:
+            return BeezeeAccountInfo(account_number=self._cached_account_number, sequence=self._next_account_sequence)
         response = await self._request(f"{CONSTANTS.ACCOUNT_INFO_PATH_URL}/{self._account_address}")
         account = response.get("account", {})
         base_account = account.get("base_account") or account.get("value") or account
-        return BeezeeAccountInfo(account_number=int(base_account["account_number"]), sequence=int(base_account["sequence"]))
+        account_info = BeezeeAccountInfo(account_number=int(base_account["account_number"]), sequence=int(base_account["sequence"]))
+        self._cached_account_number = account_info.account_number
+        self._next_account_sequence = account_info.sequence
+        return account_info
+
+    async def reserve_account_info_sequence(self, refresh: bool = False) -> BeezeeAccountInfo:
+        async with self._account_info_lock:
+            account_info = await self.get_account_info(refresh=refresh)
+            reserved = BeezeeAccountInfo(account_number=account_info.account_number, sequence=account_info.sequence)
+            self._cached_account_number = account_info.account_number
+            self._next_account_sequence = account_info.sequence + 1
+            return reserved
+
+    async def reset_account_sequence(self):
+        async with self._account_info_lock:
+            self._cached_account_number = None
+            self._next_account_sequence = None
 
     async def get_user_market_orders(self, market_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if self._account_address is None:
@@ -229,7 +251,7 @@ class BeezeeAPIDataSource:
     async def broadcast_create_order(self, market: BeezeeMarket, order_type: str, amount: Decimal, price: Decimal, gas_limit: int, memo: str = "") -> Dict[str, Any]:
         if self._signer is None:
             raise ValueError("Beezee wallet mode is required for order creation.")
-        account = await self.get_account_info()
+        account = await self.reserve_account_info_sequence()
         tx_bytes = build_signed_transaction(
             signer=self._signer,
             chain_id=self._chain_id,
@@ -246,7 +268,7 @@ class BeezeeAPIDataSource:
     async def broadcast_cancel_order(self, market_id: str, order_type: str, order_id: str, gas_limit: int, memo: str = "") -> Dict[str, Any]:
         if self._signer is None:
             raise ValueError("Beezee wallet mode is required for cancels.")
-        account = await self.get_account_info()
+        account = await self.reserve_account_info_sequence()
         tx_bytes = build_signed_transaction(
             signer=self._signer,
             chain_id=self._chain_id,

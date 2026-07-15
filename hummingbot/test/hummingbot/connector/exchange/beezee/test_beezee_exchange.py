@@ -244,6 +244,28 @@ class BeezeeExchangeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(OrderState.PENDING_CREATE, update.new_state)
         self.assertEqual("D" * 64, update.exchange_order_id)
 
+    async def test_place_cancel_defers_when_exchange_order_id_is_unresolved(self):
+        order = InFlightOrder(
+            client_order_id="OID7",
+            trading_pair="BZE-USDC",
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1"),
+            creation_timestamp=1.0,
+            price=Decimal("2.5"),
+        )
+        self.exchange._signer = Mock()
+        data_source = Mock()
+        data_source.get_market_by_trading_pair = AsyncMock(return_value=self.market)
+        data_source.broadcast_cancel_order = AsyncMock()
+        self.exchange._data_source = data_source
+        self.exchange._request_order_status = AsyncMock(return_value=Mock(exchange_order_id=None))
+
+        canceled = await self.exchange._place_cancel(order.client_order_id, order)
+
+        self.assertFalse(canceled)
+        data_source.broadcast_cancel_order.assert_not_awaited()
+
     async def test_get_fee_uses_flat_native_fee_from_params(self):
         self.exchange._tradebin_params = {"market_taker_fee": "2500ubze"}
 

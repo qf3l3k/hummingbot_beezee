@@ -283,7 +283,10 @@ class BeezeeExchange(ExchangePyBase):
             status_update = await self._request_order_status(tracked_order)
             exchange_order_id = status_update.exchange_order_id
         if not exchange_order_id or len(exchange_order_id) != CONSTANTS.ORDER_ID_LENGTH:
-            raise ValueError(f"Beezee cancel requires a resolved exchange order id for {order_id}.")
+            self.logger().debug(
+                f"Deferring Beezee cancel until the exchange order id is resolved. client_order_id={order_id}"
+            )
+            return False
 
         last_error: Optional[str] = None
         for attempt in range(2):

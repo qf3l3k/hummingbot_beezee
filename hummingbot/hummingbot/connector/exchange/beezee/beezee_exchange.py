@@ -85,6 +85,7 @@ class BeezeeExchange(ExchangePyBase):
         self._pre_create_order_ids: Dict[str, Set[str]] = {}
         self._create_order_specs: Dict[str, Tuple[str, str, str, str]] = {}
         self._processed_trade_ids_by_order: Dict[str, Set[str]] = defaultdict(set)
+        self._last_unresolved_order_log_timestamp: Dict[str, float] = {}
         self._last_status_log_timestamp = 0.0
 
         super().__init__(balance_asset_limit=balance_asset_limit, rate_limits_share_pct=rate_limits_share_pct)
@@ -457,16 +458,21 @@ class BeezeeExchange(ExchangePyBase):
             pre_create_ids = self._pre_create_order_ids.get(tracked_order.client_order_id, set())
             claimed_exchange_ids = {order.exchange_order_id for order in self.in_flight_orders.values() if order.exchange_order_id}
             matching_candidate_ids: List[str] = []
-            for candidate_id in data_source.candidate_order_ids(open_refs, expected_market_id, expected_side):
+            candidate_ids = data_source.candidate_order_ids(open_refs, expected_market_id, expected_side)
+            for candidate_id in candidate_ids:
                 if candidate_id in pre_create_ids or candidate_id in claimed_exchange_ids:
                     continue
                 candidate_order = await data_source.get_market_order(expected_market_id, expected_side, candidate_id)
                 if candidate_order is None:
                     continue
-                if (
-                    str(candidate_order.get("amount")) == expected_amount
-                    and Decimal(str(candidate_order.get("price"))) == Decimal(expected_price)
-                ):
+                try:
+                    matches = (
+                        Decimal(str(candidate_order.get("amount"))) == Decimal(expected_amount)
+                        and Decimal(str(candidate_order.get("price"))) == Decimal(expected_price)
+                    )
+                except Exception:
+                    matches = False
+                if matches:
                     matching_candidate_ids.append(candidate_id)
             if len(matching_candidate_ids) == 1:
                 candidate_id = matching_candidate_ids[0]
@@ -480,9 +486,20 @@ class BeezeeExchange(ExchangePyBase):
                     client_order_id=tracked_order.client_order_id,
                     exchange_order_id=candidate_id,
                 )
+            self._log_unresolved_order_id(
+                client_order_id=tracked_order.client_order_id,
+                expected_market_id=expected_market_id,
+                expected_side=expected_side,
+                expected_amount=expected_amount,
+                expected_price=expected_price,
+                candidate_ids=candidate_ids,
+                matching_candidate_ids=matching_candidate_ids,
+            )
 
         cancel_tx_hash = self._cancel_tx_hashes.get(tracked_order.client_order_id)
         creation_tx_hash = self._creation_tx_hashes.get(tracked_order.client_order_id)
+        if creation_tx_hash is None and len(tracked_order.exchange_order_id or "") == CONSTANTS.TX_HASH_LENGTH:
+            creation_tx_hash = tracked_order.exchange_order_id
         tx_hash = cancel_tx_hash or creation_tx_hash
         tx = await data_source.get_tx(tx_hash) if tx_hash else None
         tx_code = int((tx.get("tx_response") or {}).get("code", 0)) if tx is not None else None
@@ -494,8 +511,12 @@ class BeezeeExchange(ExchangePyBase):
             new_state = OrderState.FILLED
         elif tracked_order.is_pending_cancel_confirmation:
             new_state = OrderState.CANCELED if cancel_tx_hash is not None and tx_code == 0 else OrderState.PENDING_CANCEL
+        elif creation_tx_hash is not None and tx_code == 0:
+            # A create tx can be confirmed after the order has immediately filled.
+            # Preserve the existing lifecycle state until fill polling determines the terminal state.
+            new_state = OrderState.OPEN if tracked_order.current_state == OrderState.PENDING_CREATE else tracked_order.current_state
         elif tracked_order.executed_amount_base > Decimal("0"):
-            new_state = OrderState.CANCELED
+            new_state = OrderState.PARTIALLY_FILLED
         else:
             new_state = OrderState.PENDING_CREATE if tx_hash else OrderState.FAILED
         return OrderUpdate(
@@ -505,6 +526,26 @@ class BeezeeExchange(ExchangePyBase):
             client_order_id=tracked_order.client_order_id,
             exchange_order_id=tracked_order.exchange_order_id or tx_hash,
         )
+
+    def _log_unresolved_order_id(
+        self,
+        client_order_id: str,
+        expected_market_id: str,
+        expected_side: str,
+        expected_amount: str,
+        expected_price: str,
+        candidate_ids: List[str],
+        matching_candidate_ids: List[str],
+    ):
+        now = time.time()
+        last_log_timestamp = self._last_unresolved_order_log_timestamp.get(client_order_id, 0.0)
+        if now - last_log_timestamp >= 30.0:
+            self.logger().warning(
+                f"Beezee exchange order id is unresolved. client_order_id={client_order_id}, "
+                f"market={expected_market_id}, side={expected_side}, amount={expected_amount}, "
+                f"price={expected_price}, candidates={candidate_ids}, matches={matching_candidate_ids}"
+            )
+            self._last_unresolved_order_log_timestamp[client_order_id] = now
 
     async def _initialize_trading_pair_symbol_map(self):
         try:

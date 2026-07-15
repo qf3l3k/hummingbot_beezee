@@ -268,6 +268,32 @@ class BeezeeExchangeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(OrderState.PENDING_CREATE, update.new_state)
         self.assertEqual("D" * 64, update.exchange_order_id)
 
+    async def test_request_order_status_recovers_unique_order_id_after_restart(self):
+        order = InFlightOrder(
+            client_order_id="OID6A",
+            trading_pair="BZE-USDC",
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1"),
+            creation_timestamp=1.0,
+            price=Decimal("2.5"),
+            exchange_order_id="E" * 64,
+        )
+        data_source = Mock()
+        data_source.get_market_by_trading_pair = AsyncMock(return_value=self.market)
+        data_source.get_user_market_orders = AsyncMock(
+            return_value=[{"id": "000000000000000000000012", "market_id": self.market.market_id, "order_type": "buy"}]
+        )
+        data_source.candidate_order_ids = Mock(return_value=["000000000000000000000012"])
+        data_source.get_market_order = AsyncMock(return_value={"price": "2.5", "amount": "1000000"})
+        data_source.get_tx = AsyncMock(return_value={"tx_response": {"code": 0}})
+        self.exchange._data_source = data_source
+
+        update = await self.exchange._request_order_status(order)
+
+        self.assertEqual(OrderState.OPEN, update.new_state)
+        self.assertEqual("000000000000000000000012", update.exchange_order_id)
+
     async def test_place_cancel_defers_when_exchange_order_id_is_unresolved(self):
         order = InFlightOrder(
             client_order_id="OID7",

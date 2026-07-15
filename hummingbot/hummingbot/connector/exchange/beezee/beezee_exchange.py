@@ -453,6 +453,23 @@ class BeezeeExchange(ExchangePyBase):
                 )
 
         create_spec = self._create_order_specs.get(tracked_order.client_order_id)
+        recovered_after_restart = False
+        if create_spec is None and len(tracked_order.exchange_order_id or "") == CONSTANTS.TX_HASH_LENGTH:
+            creation_tx = await data_source.get_tx(tracked_order.exchange_order_id)
+            tx_response = (creation_tx or {}).get("tx_response")
+            creation_tx_code = (
+                int(tx_response["code"])
+                if isinstance(tx_response, dict) and "code" in tx_response
+                else None
+            )
+            if creation_tx_code == 0:
+                create_spec = (
+                    market.market_id,
+                    side,
+                    display_amount_to_chain(tracked_order.amount, market.base),
+                    display_price_to_chain(tracked_order.price, market),
+                )
+                recovered_after_restart = True
         if create_spec is not None:
             expected_market_id, expected_side, expected_amount, expected_price = create_spec
             pre_create_ids = self._pre_create_order_ids.get(tracked_order.client_order_id, set())
@@ -478,6 +495,11 @@ class BeezeeExchange(ExchangePyBase):
                 candidate_id = matching_candidate_ids[0]
                 self._pre_create_order_ids.pop(tracked_order.client_order_id, None)
                 self._create_order_specs.pop(tracked_order.client_order_id, None)
+                if recovered_after_restart:
+                    self.logger().info(
+                        f"Recovered Beezee exchange order id after restart. client_order_id={tracked_order.client_order_id}, "
+                        f"exchange_order_id={candidate_id}"
+                    )
                 state = OrderState.PARTIALLY_FILLED if tracked_order.executed_amount_base > Decimal("0") else OrderState.OPEN
                 return OrderUpdate(
                     trading_pair=tracked_order.trading_pair,

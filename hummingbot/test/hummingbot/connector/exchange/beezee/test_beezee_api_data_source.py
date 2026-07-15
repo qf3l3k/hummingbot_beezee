@@ -64,6 +64,18 @@ class BeezeeAPIDataSourceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(Decimal("3"), price)
 
+    async def test_get_last_traded_price_returns_none_for_empty_order_book(self):
+        market = AsyncMock()
+        market.market_id = "ubze/uusdc"
+        market.chain_price_scaler = Decimal("1")
+        self.data_source.get_all_markets = AsyncMock(return_value={"ubze/uusdc": market})
+        self.data_source.get_market_history = AsyncMock(return_value=[])
+        self.data_source.get_order_book = AsyncMock(return_value={"bids": [], "asks": []})
+
+        price = await self.data_source.get_last_traded_price("ubze/uusdc")
+
+        self.assertIsNone(price)
+
     def test_candidate_order_ids_filters_by_market_and_side(self):
         candidate_ids = self.data_source.candidate_order_ids(
             refs=[
@@ -93,4 +105,3 @@ class BeezeeAPIDataSourceTests(unittest.IsolatedAsyncioTestCase):
             self.data_source.fingerprint_history_trade(trade),
             self.data_source.fingerprint_history_trade(dict(trade)),
         )
-

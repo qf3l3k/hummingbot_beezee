@@ -31,7 +31,12 @@ class BeezeeAPIOrderBookDataSource(OrderBookTrackerDataSource):
             market = await self._data_source.get_market_by_trading_pair(trading_pair)
             last_price = await self._data_source.get_last_traded_price(market.market_id)
             if last_price is not None:
-                prices[trading_pair] = float(last_price)
+                try:
+                    normalized_price = Decimal(str(last_price))
+                    if normalized_price.is_finite() and normalized_price > Decimal("0"):
+                        prices[trading_pair] = float(normalized_price)
+                except Exception:
+                    continue
         return prices
 
     async def _order_book_snapshot(self, trading_pair: str) -> OrderBookMessage:

@@ -188,10 +188,15 @@ class BeezeeAPIDataSource:
         market = (await self.get_all_markets())[market_id]
         history = await self.get_market_history(market_id, limit=1)
         if history:
-            return chain_price_to_display(history[0]["price"], market)
+            price = chain_price_to_display(history[0]["price"], market)
+            return price if price.is_finite() and price > Decimal("0") else None
         order_book = await self.get_order_book(market_id)
         if order_book["bids"] and order_book["asks"]:
-            return (chain_price_to_display(order_book["bids"][0]["price"], market) + chain_price_to_display(order_book["asks"][0]["price"], market)) / Decimal("2")
+            mid_price = (
+                chain_price_to_display(order_book["bids"][0]["price"], market)
+                + chain_price_to_display(order_book["asks"][0]["price"], market)
+            ) / Decimal("2")
+            return mid_price if mid_price.is_finite() and mid_price > Decimal("0") else None
         return None
 
     async def get_balances(self) -> List[Dict[str, Any]]:

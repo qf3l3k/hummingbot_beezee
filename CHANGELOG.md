@@ -6,6 +6,15 @@ This project follows semantic versioning.
 
 - No entries yet
 
+## [0.3.0] - 2026-07-15
+
+- Prevented Hummingbot from marking Beezee cancel requests complete before on-chain transaction confirmation
+- Made Beezee order-id resolution conservative by excluding pre-existing orders and refusing ambiguous candidates
+- Prevented historical fills from being attributed to orders created after those trades
+- Added polling and reconnect recovery after Beezee block websocket disconnections
+- Added transaction-hash logging for create-order and cancel-order broadcasts
+- Added regression coverage for pending cancel confirmation and ambiguous exchange-order candidates
+
 ## [0.2.1] - 2026-03-26
 
 - Fixed Beezee dynamic REST throttler ids for denom metadata, balances, tx, and user order endpoints

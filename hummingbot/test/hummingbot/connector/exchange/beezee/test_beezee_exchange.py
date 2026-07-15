@@ -189,6 +189,61 @@ class BeezeeExchangeTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(OrderState.CANCELED, update.new_state)
 
+    async def test_request_order_status_keeps_cancel_pending_until_tx_is_confirmed(self):
+        order = InFlightOrder(
+            client_order_id="OID5",
+            trading_pair="BZE-USDC",
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1"),
+            creation_timestamp=1.0,
+            price=Decimal("2.5"),
+            exchange_order_id="000000000000000000000005",
+            initial_state=OrderState.PENDING_CANCEL,
+        )
+        self.exchange._cancel_tx_hashes[order.client_order_id] = "C" * 64
+        data_source = Mock()
+        data_source.get_market_by_trading_pair = AsyncMock(return_value=self.market)
+        data_source.get_user_market_orders = AsyncMock(return_value=[])
+        data_source.candidate_order_ids = Mock(return_value=[])
+        data_source.get_tx = AsyncMock(return_value=None)
+        self.exchange._data_source = data_source
+
+        update = await self.exchange._request_order_status(order)
+
+        self.assertEqual(OrderState.PENDING_CANCEL, update.new_state)
+
+    async def test_request_order_status_does_not_claim_ambiguous_order_candidates(self):
+        order = InFlightOrder(
+            client_order_id="OID6",
+            trading_pair="BZE-USDC",
+            order_type=OrderType.LIMIT,
+            trade_type=TradeType.BUY,
+            amount=Decimal("1"),
+            creation_timestamp=1.0,
+            price=Decimal("2.5"),
+        )
+        self.exchange._creation_tx_hashes[order.client_order_id] = "D" * 64
+        self.exchange._pre_create_order_ids[order.client_order_id] = set()
+        self.exchange._create_order_specs[order.client_order_id] = (self.market.market_id, "buy", "1000000", "2.5")
+        data_source = Mock()
+        data_source.get_market_by_trading_pair = AsyncMock(return_value=self.market)
+        data_source.get_user_market_orders = AsyncMock(
+            return_value=[
+                {"id": "000000000000000000000010", "market_id": self.market.market_id, "order_type": "buy"},
+                {"id": "000000000000000000000011", "market_id": self.market.market_id, "order_type": "buy"},
+            ]
+        )
+        data_source.candidate_order_ids = Mock(return_value=["000000000000000000000010", "000000000000000000000011"])
+        data_source.get_market_order = AsyncMock(return_value={"price": "2.5", "amount": "1000000"})
+        data_source.get_tx = AsyncMock(return_value=None)
+        self.exchange._data_source = data_source
+
+        update = await self.exchange._request_order_status(order)
+
+        self.assertEqual(OrderState.PENDING_CREATE, update.new_state)
+        self.assertEqual("D" * 64, update.exchange_order_id)
+
     async def test_get_fee_uses_flat_native_fee_from_params(self):
         self.exchange._tradebin_params = {"market_taker_fee": "2500ubze"}
 

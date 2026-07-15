@@ -41,13 +41,21 @@ class BeezeeAPIOrderBookDataSource(OrderBookTrackerDataSource):
         return BeezeeOrderBook.snapshot_message_from_exchange(trading_pair, market, order_book["bids"], order_book["asks"], update_id, time.time())
 
     async def listen_for_subscriptions(self):
-        try:
-            await self._listen_new_blocks()
-        except Exception:
-            self.logger().warning("Beezee block websocket unavailable. Falling back to fixed-interval polling.")
-            while True:
+        while True:
+            try:
+                await self._listen_new_blocks()
+                self.logger().warning("Beezee block websocket disconnected. Falling back to polling before reconnecting.")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().warning("Beezee block websocket unavailable. Falling back to polling before reconnecting.")
+            try:
                 await self._poll_and_publish()
-                await self._sleep(CONSTANTS.DEFAULT_ORDER_BOOK_POLL_INTERVAL)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().exception("Error polling Beezee order book after websocket disconnect.")
+            await self._sleep(CONSTANTS.DEFAULT_ORDER_BOOK_POLL_INTERVAL)
 
     async def _listen_new_blocks(self):
         ws = await self._connected_websocket_assistant()

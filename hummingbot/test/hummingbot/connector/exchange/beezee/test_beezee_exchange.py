@@ -285,7 +285,9 @@ class BeezeeExchangeTests(unittest.IsolatedAsyncioTestCase):
             return_value=[{"id": "000000000000000000000012", "market_id": self.market.market_id, "order_type": "buy"}]
         )
         data_source.candidate_order_ids = Mock(return_value=["000000000000000000000012"])
-        data_source.get_market_order = AsyncMock(return_value={"price": "2.5", "amount": "1000000"})
+        data_source.get_market_order = AsyncMock(
+            return_value={"price": "2.5", "amount": "1000000", "created_at": "1"}
+        )
         data_source.get_tx = AsyncMock(return_value={"tx_response": {"code": 0}})
         self.exchange._data_source = data_source
 

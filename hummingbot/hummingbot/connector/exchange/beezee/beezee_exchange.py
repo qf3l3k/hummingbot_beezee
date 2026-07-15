@@ -487,6 +487,13 @@ class BeezeeExchange(ExchangePyBase):
                         Decimal(str(candidate_order.get("amount"))) == Decimal(expected_amount)
                         and Decimal(str(candidate_order.get("price"))) == Decimal(expected_price)
                     )
+                    if recovered_after_restart:
+                        created_at = Decimal(str(candidate_order["created_at"]))
+                        order_created_at = Decimal(str(tracked_order.creation_timestamp))
+                        matches = (
+                            matches
+                            and abs(created_at - order_created_at) <= CONSTANTS.ORDER_ID_RECOVERY_TIME_TOLERANCE
+                        )
                 except Exception:
                     matches = False
                 if matches:

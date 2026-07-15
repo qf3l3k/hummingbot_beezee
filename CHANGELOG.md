@@ -6,6 +6,12 @@ This project follows semantic versioning.
 
 - No entries yet
 
+## [0.3.1] - 2026-07-15
+
+- Deferred cancel requests until Beezee resolves the on-chain exchange order id
+- Replaced cancel-order exceptions during order-id resolution with normal polling retries
+- Added regression coverage for unresolved cancel requests
+
 ## [0.3.0] - 2026-07-15
 
 - Prevented Hummingbot from marking Beezee cancel requests complete before on-chain transaction confirmation

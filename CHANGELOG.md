@@ -6,6 +6,15 @@ This project follows semantic versioning.
 
 - No entries yet
 
+## [0.4.0] - 2026-07-16
+
+- Stabilized Beezee order resolution and prevented duplicate order-created events after a confirmed order transaction
+- Added safe recovery of Beezee native order ids after Hummingbot restart using confirmed transaction, order details, and creation time
+- Kept ambiguous order-id matches unresolved rather than risking cancellation of an unrelated order
+- Added tx hash and unresolved-order diagnostics for live order lifecycle troubleshooting
+- Treated empty or invalid order books as unavailable prices instead of propagating non-finite values to Hummingbot's rate oracle
+- Added regression coverage for restart recovery and empty/non-finite order-book price handling
+
 ## [0.3.1] - 2026-07-15
 
 - Deferred cancel requests until Beezee resolves the on-chain exchange order id
